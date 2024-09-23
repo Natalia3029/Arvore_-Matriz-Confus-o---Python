@@ -1,0 +1,127 @@
+# Importando as bibliotecas necessárias
+
+import pandas as pd  # Biblioteca para manipulação de dados
+from sklearn.model_selection import train_test_split  # Função para dividir dados em treino e teste
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder  # Ferramentas para codificação de variáveis categóricas
+from sklearn.tree import DecisionTreeClassifier  # Modelo de Árvore de Decisão
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report  # Métricas para avaliação do modelo
+import joblib  # Biblioteca para salvar e carregar modelos
+from google.colab import files  # Biblioteca específica do Colab para upload de arquivos
+from sklearn import tree
+from sklearn import metrics
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+# Carregando e inspecionando a base de dados
+
+uploaded = files.upload()
+base = pd.read_csv('brasileirao.csv')  # Lê o arquivo CSV carregado em um DataFrame
+
+print("Primeiras linhas da base de dados:")  # Exibindo uma amostra dos dados
+print(base.head())  # Mostra as primeiras 5 linhas do DataFrame para verificar o conteúdo
+
+
+# Separando dados e rótulos
+
+X, y = base.iloc[:, :-1], base.iloc[:, -1]  # X contém todas as colunas, exceto a última (características), e y contém a última coluna (variável alvo/decisão)
+print("Primeiras linhas de X e y:")  # Exibindo amostras dos dados e rótulos
+print(X.head(), y.head())  # Mostra as primeiras linhas de X e y para verificar o conteúdo
+
+
+# Dividindo em conjuntos de treino e teste
+
+X_treino, X_teste, y_treino, y_teste = train_test_split(
+    X, y, test_size=0.10, random_state=42
+)
+
+
+# Divide os dados em treino (60%) e teste (40%), com uma semente fixa para reprodutibilidade
+
+print("Dimensões dos conjuntos de treino e teste:")  # Exibindo as dimensões dos conjuntos divididos
+print(f"X_treino: {X_treino.shape}, X_teste: {X_teste.shape}")  # Mostra as dimensões dos conjuntos de treino e teste
+
+
+# Codificando colunas categóricas
+
+label_encoder = LabelEncoder()  # Cria um codificador para transformar variáveis categóricas em números
+if 'Time' in X_treino.columns:  # Verifica se a coluna 'Time' está presente no conjunto de dados
+    X_treino['Time'] = label_encoder.fit_transform(X_treino['Time'])  # Codifica a coluna 'Time' em números inteiros para o conjunto de treino
+    X_teste['Time'] = label_encoder.transform(X_teste['Time'])  # Aplica a mesma codificação para o conjunto de teste
+
+
+# Usando OneHotEncoder para codificar a coluna 'Time' em múltiplas colunas binárias
+
+onehot_encoder = OneHotEncoder(sparse_output=False)  # Define sparse_output como False para retornar um array denso
+
+X_treino_encoded = onehot_encoder.fit_transform(X_treino[['Time']])  # Ajusta e transforma os dados de treino para codificação one-hot
+X_teste_encoded = onehot_encoder.transform(X_teste[['Time']])  # Apenas transforma os dados de teste para codificação one-hot
+
+
+# Convertendo o resultado da codificação OneHot para DataFrames com índices alinhados
+
+X_treino_encoded_df = pd.DataFrame(
+X_treino_encoded,
+columns=onehot_encoder.get_feature_names_out(['Time']),
+index=X_treino.index  # Alinha os índices para manter a consistência com X_treino
+)
+X_teste_encoded_df = pd.DataFrame(
+X_teste_encoded,
+columns=onehot_encoder.get_feature_names_out(['Time']),
+index=X_teste.index  # Alinha os índices para manter a consistência com X_teste
+)
+
+# Concatenando as colunas codificadas com o restante das colunas de características
+
+X_treino = pd.concat([X_treino.drop(columns=['Time']), X_treino_encoded_df], axis=1)
+X_teste = pd.concat([X_teste.drop(columns=['Time']), X_teste_encoded_df], axis=1)
+print("Dados após codificação OneHot:")  # Exibindo dados após a codificação
+print(X_treino.head(), X_teste.head())  # Mostra as primeiras linhas de X_treino e X_teste após a codificação
+
+
+# Garantindo que X e y têm o mesmo número de amostras
+
+X_treino, y_treino = X_treino.iloc[:len(y_treino)], y_treino  # Ajusta X_treino para ter o mesmo número de amostras que y_treino
+X_teste, y_teste = X_teste.iloc[:len(y_teste)], y_teste  # Ajusta X_teste para ter o mesmo número de amostras que y_teste
+
+# Codificando os rótulos
+
+label_encoder.fit(pd.concat([y_treino, y_teste]))  # Treina o codificador com todos os rótulos possíveis
+y_treino = label_encoder.transform(y_treino)  # Codifica os rótulos de treino
+y_teste = label_encoder.transform(y_teste)    # Codifica os rótulos de teste
+
+
+# Criando e ajustando o modelo de Árvore de Decisão
+
+model = DecisionTreeClassifier(criterion='entropy')  # Inicializa o modelo de árvore de decisão com o critério de entropia
+model.fit(X_treino, y_treino)  # Ajusta o modelo usando os dados de treino
+
+print("Modelo ajustado com sucesso :D :D")
+
+# Fazendo previsões e avaliando o modelo
+
+y_pred = model.predict(X_teste)  # Gera previsões usando o modelo treinado
+print(f"Dimensão de y_pred: {len(y_pred)}, Dimensão de y_teste: {len(y_teste)}")  # Exibe o número de previsões e rótulos de teste
+
+# Avaliando o modelo com matriz de confusão e acurácia
+
+conf_matrix = confusion_matrix(y_teste, y_pred)  # Calcula a matriz de confusão
+accuracy = accuracy_score(y_teste, y_pred)        # Calcula a acurácia do modelo
+
+print("Matriz de confusão:")  # Exibindo a matriz de confusão
+print(conf_matrix)  # Mostra a matriz de confusão
+
+print(f"Acurácia: {accuracy:.2f}")  # Exibe a acurácia do modelo, formatada para duas casas decimais
+
+# Avaliando o modelo com métricas detalhadas
+
+print("Relatório de classificação:")
+print(classification_report(y_teste, y_pred, zero_division=1))  # Relatório detalhado com métricas de precisão, recall e f-score
+
+# Salvando e carregando o modelo
+
+joblib.dump(model, 'modelo_decision_tree.pkl')  # Salva o modelo ajustado em um arquivo usando joblib
+
+print("Modelo salvo como 'modelo_decision_tree.pkl'")  # Confirma que o modelo foi salvo
+modelo_carregado = joblib.load('modelo_decision_tree.pkl')  # Carrega o modelo salvo
+print("Modelo carregado com sucesso :D XD :D")  # Confirma que o modelo foi carregado
